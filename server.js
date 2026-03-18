@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const PDFDocument = require('pdfkit');
 const { exec } = require('child_process');
 
 const app = express();
@@ -117,7 +118,7 @@ app.post('/api/crop', async (req, res) => {
 
 // 전체 이미지 일괄 크롭 저장 (프로그레스 SSE 스트리밍)
 app.post('/api/crop-all', async (req, res) => {
-  const { folderPath, files, topPx, bottomPx, leftPx, rightPx, outputPath } = req.body;
+  const { folderPath, files, topPx, bottomPx, leftPx, rightPx, outputPath, optRename, optPdf } = req.body;
   if (!folderPath || !files || !files.length) {
     return res.status(400).json({ error: 'folderPath와 files가 필요합니다.' });
   }
@@ -140,6 +141,14 @@ app.post('/api/crop-all', async (req, res) => {
   let saved = 0;
   const errors  = [];
 
+  const padLength = String(total).length;
+  let pdfDoc = null;
+  if (optPdf) {
+    const pdfPath = path.join(outDir, 'output.pdf');
+    pdfDoc = new PDFDocument({ autoFirstPage: false });
+    pdfDoc.pipe(fs.createWriteStream(pdfPath));
+  }
+
   for (let i = 0; i < total; i++) {
     const filename = files[i];
     const absPath  = path.join(path.resolve(folderPath), filename);
@@ -159,17 +168,31 @@ app.post('/api/crop-all', async (req, res) => {
         continue;
       }
 
-      const outFile = path.join(outDir, filename);
+      let outFilename = filename;
+      if (optRename) {
+        outFilename = String(i + 1).padStart(padLength, '0') + path.extname(filename);
+      }
+
+      const outFile = path.join(outDir, outFilename);
       await sharp(absPath)
         .extract({ left, top, width: cropW, height: cropH })
         .toFile(outFile);
 
+      if (pdfDoc) {
+        pdfDoc.addPage({ size: [cropW, cropH], margin: 0 });
+        pdfDoc.image(outFile, 0, 0, { width: cropW, height: cropH });
+      }
+
       saved++;
-      send({ current: i + 1, total, filename, status: 'ok' });
+      send({ current: i + 1, total, filename: outFilename, status: 'ok' });
     } catch (err) {
       errors.push({ filename, error: err.message });
       send({ current: i + 1, total, filename, status: 'error', message: err.message });
     }
+  }
+
+  if (pdfDoc) {
+    pdfDoc.end();
   }
 
   send({ done: true, saved, errors });

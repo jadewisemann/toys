@@ -39,6 +39,8 @@ const progressOverlay = document.getElementById('progress-overlay');
 const progressBar   = document.getElementById('progress-bar');
 const progressText  = document.getElementById('progress-text');
 const progressFile  = document.getElementById('progress-file');
+const optRenameCheck= document.getElementById('opt-rename');
+const optPdfCheck   = document.getElementById('opt-pdf');
 
 // ── 상태 ──────────────────────────────────────
 const state = {
@@ -393,6 +395,8 @@ function cropParams() {
     leftPx:   state.leftPx,
     rightPx:  state.rightPx,
     outputPath: outputInput.value.trim() || undefined,
+    optRename: optRenameCheck.checked,
+    optPdf:    optPdfCheck.checked,
   };
 }
 
