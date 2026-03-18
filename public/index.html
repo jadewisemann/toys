@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>캡처 이미지 커터</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── 사이드바 ── -->
+  <aside id="sidebar">
+    <div class="sidebar-top">
+      <h1 class="app-title">✂ 이미지 커터</h1>
+
+      <section class="panel">
+        <label class="panel-label">폴더 선택</label>
+        <button id="pick-btn" class="pick-folder-btn">📂 폴더 선택…</button>
+        <div class="folder-row">
+          <input id="folder-input" type="text" placeholder="/Users/me/ebook-shots" spellcheck="false" />
+          <button id="load-btn">불러오기</button>
+        </div>
+        <p id="folder-status" class="status-msg"></p>
+      </section>
+
+      <section class="panel">
+        <label class="panel-label">프리뷰 크기</label>
+        <div class="radio-group">
+          <label><input type="radio" name="preview-mode" value="fit-height" checked /> 세로 맞춤</label>
+          <label><input type="radio" name="preview-mode" value="fit-width" /> 가로 맞춤</label>
+          <label><input type="radio" name="preview-mode" value="actual" /> 100%</label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label class="panel-label">크롭 값 (픽셀)</label>
+        <div class="crop-inputs">
+          <!-- 위/아래 -->
+          <div class="crop-field">
+            <span class="crop-label top-label">▲ 위</span>
+            <input id="top-px" type="number" value="0" min="0" />
+            <span class="px-unit">px</span>
+          </div>
+          <div class="crop-field">
+            <span class="crop-label bot-label">▼ 아래</span>
+            <input id="bottom-px" type="number" value="0" min="0" />
+            <span class="px-unit">px</span>
+          </div>
+
+          <div class="crop-divider"></div>
+
+          <!-- 좌/우 동기화 토글 -->
+          <div class="sync-row">
+            <span class="crop-label" style="color:var(--text-muted)">좌우 동기화</span>
+            <label class="toggle">
+              <input type="checkbox" id="lr-sync" checked />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+          </div>
+
+          <!-- 좌/우 -->
+          <div class="crop-field">
+            <span class="crop-label left-label">◀ 좌</span>
+            <input id="left-px" type="number" value="0" min="0" />
+            <span class="px-unit">px</span>
+          </div>
+          <div class="crop-field">
+            <span class="crop-label right-label">▶ 우</span>
+            <input id="right-px" type="number" value="0" min="0" />
+            <span class="px-unit">px</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label class="panel-label">저장 위치</label>
+        <button id="pick-out-btn" class="pick-folder-btn">📂 출력 폴더 선택…</button>
+        <div class="output-row">
+          <input id="output-input" type="text" placeholder="기본: 소스폴더/output" spellcheck="false" />
+        </div>
+        <p class="status-msg" style="margin-top:4px;font-size:10px;color:var(--text-muted)">비워두면 소스 폴더/output 에 저장</p>
+      </section>
+    </div>
+
+    <div class="sidebar-bottom">
+      <div id="file-list"></div>
+    </div>
+  </aside>
+
+  <!-- ── 메인 콘텐츠 ── -->
+  <main id="main">
+
+    <!-- 상단 툴바 -->
+    <div id="toolbar">
+      <button id="prev-btn" class="nav-btn" disabled>◀ 이전</button>
+      <span id="image-counter">—</span>
+      <button id="next-btn" class="nav-btn" disabled>다음 ▶</button>
+
+      <div class="toolbar-sep"></div>
+
+      <button id="save-one-btn" class="action-btn" disabled>💾 현재 저장</button>
+      <button id="save-all-btn" class="action-btn primary" disabled>💾 전체 저장</button>
+    </div>
+
+    <!-- 프리뷰 영역 -->
+    <div id="preview-wrapper">
+      <div id="preview-container">
+        <!-- 이미지 -->
+        <img id="preview-img" src="" alt="" draggable="false" />
+
+        <!-- 크롭 오버레이 -->
+        <div id="overlay-top"    class="crop-overlay ov-top"></div>
+        <div id="overlay-bottom" class="crop-overlay ov-bottom"></div>
+        <div id="overlay-left"   class="crop-overlay ov-left"></div>
+        <div id="overlay-right"  class="crop-overlay ov-right"></div>
+
+        <!-- 드래그 핸들 (위/아래/좌/우) -->
+        <div id="handle-top"    class="drag-handle h-horiz" title="위쪽 크롭 경계"></div>
+        <div id="handle-bottom" class="drag-handle h-horiz" title="아래쪽 크롭 경계"></div>
+        <div id="handle-left"   class="drag-handle h-vert"  title="왼쪽 크롭 경계"></div>
+        <div id="handle-right"  class="drag-handle h-vert"  title="오른쪽 크롭 경계"></div>
+      </div>
+    </div>
+
+    <!-- 돋보기 캔버스 -->
+    <canvas id="magnifier" width="180" height="180"></canvas>
+
+    <!-- 전체 저장 진행 오버레이 -->
+    <div id="progress-overlay">
+      <div id="progress-box">
+        <p id="progress-title">💾 전체 저장 중…</p>
+        <div id="progress-bar-wrap">
+          <div id="progress-bar"></div>
+        </div>
+        <p id="progress-text">0 / 0</p>
+        <p id="progress-file"></p>
+      </div>
+    </div>
+
+    <!-- 토스트 -->
+    <div id="toast"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
