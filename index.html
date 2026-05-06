@@ -3,23 +3,46 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Glyph Weight Field</title>
+        <title>Toys</title>
         <link rel="stylesheet" href="style.css" />
     </head>
     <body>
-        <main class="page-shell">
+        <main class="shell">
             <header class="masthead">
-                <p class="kicker">Lilex variable mono</p>
+                <p class="kicker">short web demos</p>
+                <h1>toys</h1>
             </header>
 
-            <section
-                class="type-field"
-                id="typeField"
-                aria-label="Interactive glyph field"
-            ></section>
-        </main>
+            <section class="demo-list" id="demoList" aria-label="Toy demos">
+                <a class="demo-card" href="./font-ticker-around-cursor/index.html">
+                    <div class="demo-meta">
+                        <span>01</span>
+                        <span>live</span>
+                    </div>
+                    <div>
+                        <h2 class="demo-title">Font Ticker Around Cursor</h2>
+                        <p class="demo-description">
+                            A pointer-reactive Lilex glyph field with weight
+                            distortion.
+                        </p>
+                    </div>
+                </a>
 
-        <div class="cursor-orb" id="cursorOrb" aria-hidden="true"></div>
+                <a class="demo-card" href="./glyph-weight-animation/index.html">
+                    <div class="demo-meta">
+                        <span>02</span>
+                        <span>live</span>
+                    </div>
+                    <div>
+                        <h2 class="demo-title">Glyph Weight Animation</h2>
+                        <p class="demo-description">
+                            Dense glyph waves driven by variable font weight
+                            changes.
+                        </p>
+                    </div>
+                </a>
+            </section>
+        </main>
 
         <script src="script.js"></script>
     </body>
