@@ -9,29 +9,6 @@ const glyphBank = [
   ..."+-*/=%!?:;.,_~#@$&|^<>[]{}()",
 ];
 
-const codeFragments = [
-  "const",
-  "let",
-  "return",
-  "glyph",
-  "weight",
-  "cursor",
-  "clamp",
-  "wght",
-  "radius",
-  "dist",
-  "=>",
-  "===",
-  "!==",
-  "<=",
-  ">=",
-  "++",
-  "--",
-  "</>",
-  "&&",
-  "||",
-];
-
 const pointer = {
   x: window.innerWidth / 2,
   y: window.innerHeight / 2,
@@ -47,6 +24,13 @@ const lerp = (from, to, amount) => from + (to - from) * amount;
 const rounded = (value) => Math.round(value);
 const precise = (value) => Number(value.toFixed(2));
 const smoothstep = (value) => value * value * (3 - 2 * value);
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
 
 let seed = 9247;
 function random() {
@@ -61,23 +45,19 @@ function pick(items) {
 function buildGlyphs() {
   glyphs.length = 0;
   const fragment = document.createDocumentFragment();
+
   const rows = Math.max(20, Math.ceil(window.innerHeight / 42) + 10);
   const columns = Math.max(34, Math.ceil(window.innerWidth / 34));
 
   for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
-    const row = document.createElement("div");
-    row.className = "glyph-row";
-
     for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
-      const token = random() > 0.9 ? pick(codeFragments) : pick(glyphBank);
+      const token = pick(glyphBank);
       const span = document.createElement("span");
       span.className = "glyph";
       span.textContent = token;
-      row.appendChild(span);
+      fragment.appendChild(span);
       glyphs.push({ element: span, x: 0, y: 0 });
     }
-
-    fragment.appendChild(row);
   }
 
   typeField.replaceChildren(fragment);
@@ -104,7 +84,10 @@ function setPointer(event) {
 
 function setDiameter(delta) {
   pointer.targetDiameter = clamp(72, pointer.targetDiameter + delta, 280);
-  document.documentElement.style.setProperty("--orb-size", `${rounded(pointer.targetDiameter)}px`);
+  document.documentElement.style.setProperty(
+    "--orb-size",
+    `${rounded(pointer.targetDiameter)}px`,
+  );
 }
 
 function updateGlyphs() {
@@ -123,11 +106,19 @@ function updateGlyphs() {
     }
 
     const centerPull = 1 - distance / radius;
-    const detailPull = smoothstep(centerPull);
-    const weight = clamp(100, 100 + detailPull * (360 + inverseDiameterBoost * 240), 700);
+    // const detailPull = smoothstep(centerPull);
+    const detailPull = Math.sqrt(centerPull);
+    const weight = clamp(
+      100,
+      100 + detailPull * (360 + inverseDiameterBoost * 240),
+      700,
+    );
 
     glyph.element.style.setProperty("--glyph_weight", precise(weight));
-    glyph.element.style.setProperty("--heat-mix", `${precise(66 + detailPull * 34)}%`);
+    glyph.element.style.setProperty(
+      "--heat-mix",
+      `${precise(66 + detailPull * 34)}%`,
+    );
   });
 }
 
@@ -163,7 +154,7 @@ window.addEventListener(
     setPointer(event);
     setDiameter(event.deltaY > 0 ? 18 : -18);
   },
-  { passive: true }
+  { passive: true },
 );
 
 window.addEventListener("pointerdown", (event) => {
@@ -175,8 +166,16 @@ window.addEventListener("pointerup", () => {
   setDiameter(24);
 });
 
-window.addEventListener("resize", () => {
-  pointer.targetX = Math.min(pointer.targetX, window.innerWidth);
-  pointer.targetY = Math.min(pointer.targetY, window.innerHeight);
-  buildGlyphs();
-});
+const handleResie = debounce(() => {
+  pointer.targetX = Math.min(pointer.targetX, windox.innerWidth);
+  pointer.targetY = Math.min(pointer.targetY, windox.innerHeight);
+
+  typeField.style.opacity = 0;
+
+  setTimeout(() => {
+    buildGlyphs();
+    typeField.style.opacity = "1";
+  }, 300);
+}, 250);
+
+window.addEventListener("resize", handleResize);
