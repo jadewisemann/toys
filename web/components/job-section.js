@@ -35,23 +35,41 @@ class JobSection extends HTMLElement {
   }
 
   renderJobs(jobs) {
-    this.list.replaceChildren();
+    const signature = JSON.stringify(jobs);
+    if (signature === this.lastJobsSignature) {
+      return;
+    }
+    this.lastJobsSignature = signature;
+
+    const existingCards = new Map();
+    for (const card of this.list.querySelectorAll("job-card[data-job-key]")) {
+      existingCards.set(card.dataset.jobKey, card);
+    }
+
+    const fragment = document.createDocumentFragment();
     if (!jobs.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
       empty.textContent = this.emptyText;
-      this.list.append(empty);
+      fragment.append(empty);
+      this.list.replaceChildren(fragment);
       return;
     }
 
     for (const job of jobs) {
-      const card = document.createElement("job-card");
+      const jobKey = job.job_id || `${job.url || ""}:${job.format || ""}:${job.filename || ""}`;
+      const card = existingCards.get(jobKey) || document.createElement("job-card");
+      card.dataset.jobKey = jobKey;
       if (this.hideDownload) {
         card.setAttribute("hide-download", "");
+      } else {
+        card.removeAttribute("hide-download");
       }
       card.job = job;
-      this.list.append(card);
+      fragment.append(card);
     }
+
+    this.list.replaceChildren(fragment);
   }
 }
 

@@ -12,6 +12,7 @@ class JobCard extends HTMLElement {
 
   render() {
     const job = this._job || {};
+    const wasOpen = Boolean(this.querySelector("details")?.open);
     const status = escapeHtml(job.status || "unknown");
     const percent = percentValue(job);
     const logs = Array.isArray(job.logs) ? job.logs : [];
@@ -40,6 +41,11 @@ class JobCard extends HTMLElement {
         <pre>${logText}</pre>
       </details>
     `;
+
+    const details = this.querySelector("details");
+    if (details) {
+      details.open = wasOpen;
+    }
   }
 }
 
