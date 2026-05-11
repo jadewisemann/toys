@@ -1,12 +1,15 @@
 import json
+import mimetypes
 import os
 import queue
+import re
+import sqlite3
 import threading
 import unicodedata
 import uuid
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory
 from yt_dlp import YoutubeDL
 
 try:
@@ -18,18 +21,230 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 DOWNLOAD_DIR = BASE_DIR / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
+DB_PATH = BASE_DIR / "history.sqlite3"
+MAX_WORKERS = int(os.environ.get("MAX_DOWNLOADS", "2"))
+VIDEO_ID_PATTERN = re.compile(r"\[([A-Za-z0-9_-]{6,})\]")
 
-app = Flask(__name__)
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
+
+app = Flask(__name__, template_folder="web", static_folder="web", static_url_path="/static")
 
 jobs = {}
 jobs_lock = threading.Lock()
+download_queue = queue.Queue()
+workers_started = False
+workers_lock = threading.Lock()
+JOB_STATES = {"queued", "starting", "running", "downloading", "processing", "complete", "error", "end"}
+
+
+@app.after_request
+def fix_static_mime_types(response):
+    if request.path.endswith((".js", ".mjs")):
+        response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    elif request.path.endswith(".css"):
+        response.headers["Content-Type"] = "text/css; charset=utf-8"
+    return response
 
 
 def publish(job_id, event):
     with jobs_lock:
         job = jobs.get(job_id)
+        if job:
+            if event.get("status") in JOB_STATES:
+                job["status"] = event["status"]
+            if "percent" in event:
+                job["percent"] = event["percent"]
+            if "message" in event and event["message"]:
+                job["logs"].append(event["message"])
+            if "title" in event:
+                job["title"] = event["title"]
+            if "filename" in event:
+                job["filename"] = event["filename"]
     if job:
-        job["queue"].put(event)
+        job["events"].put(event)
+
+
+def now_iso():
+    from datetime import datetime
+
+    return datetime.now().replace(microsecond=0).isoformat()
+
+
+def db_connect():
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def init_db():
+    with db_connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS history (
+                job_id TEXT PRIMARY KEY,
+                url TEXT NOT NULL,
+                format TEXT NOT NULL,
+                status TEXT NOT NULL,
+                title TEXT,
+                filename TEXT,
+                file_path TEXT,
+                error TEXT,
+                logs TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_history_url_format ON history(url, format)"
+        )
+    import_existing_downloads()
+
+
+def import_existing_downloads():
+    files = [path for path in DOWNLOAD_DIR.iterdir() if path.is_file() and path.name != ".gitkeep"]
+    if not files:
+        return
+
+    with db_connect() as connection:
+        for path in files:
+            existing = connection.execute(
+                "SELECT job_id FROM history WHERE file_path = ?", (str(path),)
+            ).fetchone()
+            if existing:
+                continue
+
+            match = VIDEO_ID_PATTERN.search(path.stem)
+            video_id = match.group(1) if match else path.stem
+            title = path.stem[: match.start()].strip() if match else path.stem
+            requested_format = "audio" if path.suffix.lower() == ".mp3" else "video"
+            job_id = uuid.uuid5(uuid.NAMESPACE_URL, str(path)).hex
+            timestamp = now_iso()
+            url = f"https://www.youtube.com/watch?v={video_id}" if match else ""
+
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO history (
+                    job_id, url, format, status, title, filename, file_path, error,
+                    logs, created_at, started_at, finished_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    url,
+                    requested_format,
+                    "complete",
+                    clean_message(title),
+                    path.name,
+                    str(path),
+                    "",
+                    json.dumps(["Imported existing file."], ensure_ascii=False),
+                    timestamp,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+
+
+def row_to_job(row):
+    return {
+        "job_id": row["job_id"],
+        "url": row["url"],
+        "format": row["format"],
+        "status": row["status"],
+        "title": row["title"] or "",
+        "filename": row["filename"] or "",
+        "error": row["error"] or "",
+        "logs": json.loads(row["logs"] or "[]"),
+        "created_at": row["created_at"],
+        "started_at": row["started_at"] or "",
+        "finished_at": row["finished_at"],
+    }
+
+
+def save_history(job):
+    with db_connect() as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO history (
+                job_id, url, format, status, title, filename, file_path, error,
+                logs, created_at, started_at, finished_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job["job_id"],
+                job["url"],
+                job["format"],
+                job["status"],
+                job.get("title", ""),
+                job.get("filename", ""),
+                job.get("file_path", ""),
+                job.get("error", ""),
+                json.dumps(job.get("logs", []), ensure_ascii=False),
+                job["created_at"],
+                job.get("started_at", ""),
+                job.get("finished_at", now_iso()),
+            ),
+        )
+
+
+def recent_history(limit=100):
+    with db_connect() as connection:
+        rows = connection.execute(
+            "SELECT * FROM history ORDER BY finished_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [row_to_job(row) for row in rows]
+
+
+def history_matches(url, requested_format):
+    with db_connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT * FROM history
+            WHERE url = ? AND format = ?
+            ORDER BY finished_at DESC
+            """,
+            (url, requested_format),
+        ).fetchall()
+    return [row_to_job(row) for row in rows]
+
+
+def find_duplicates(items):
+    duplicates = []
+    with jobs_lock:
+        active = [job for job in jobs.values() if job["status"] not in {"complete", "error", "end"}]
+
+    for item in items:
+        matches = []
+        for job in active:
+            if job["url"] == item["url"] and job["format"] == item["format"]:
+                matches.append(job_snapshot(job))
+        matches.extend(history_matches(item["url"], item["format"]))
+        if matches:
+            duplicates.append({"url": item["url"], "format": item["format"], "matches": matches})
+
+    return duplicates
+
+
+def job_snapshot(job):
+    return {
+        "job_id": job["job_id"],
+        "url": job["url"],
+        "format": job["format"],
+        "status": job["status"],
+        "percent": job.get("percent", 0),
+        "title": job.get("title", ""),
+        "filename": job.get("filename", ""),
+        "error": job.get("error", ""),
+        "logs": job.get("logs", [])[-80:],
+        "created_at": job["created_at"],
+        "started_at": job.get("started_at", ""),
+        "finished_at": job.get("finished_at", ""),
+        "download_url": f"/api/files/{job['job_id']}" if job.get("file_path") else "",
+    }
 
 
 def clean_message(message):
@@ -185,14 +400,27 @@ def ydl_options(job_id, requested_format):
     }
 
 
-def run_download(job_id, url, requested_format):
+def run_download(job):
+    job_id = job["job_id"]
+    url = job["url"]
+    requested_format = job["format"]
     try:
+        with jobs_lock:
+            job["status"] = "running"
+            job["started_at"] = now_iso()
+
         publish(job_id, {"status": "starting", "percent": 0, "message": "Starting download..."})
 
         with YoutubeDL(ydl_options(job_id, requested_format)) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             final_path = normalize_downloaded_files(info, filename)
+
+        with jobs_lock:
+            job["title"] = clean_message(info.get("title", ""))
+            job["filename"] = final_path.name if final_path else ""
+            job["file_path"] = str(final_path) if final_path else ""
+            job["finished_at"] = now_iso()
 
         publish(
             job_id,
@@ -205,60 +433,188 @@ def run_download(job_id, url, requested_format):
             },
         )
     except Exception as exc:
-        publish(job_id, {"status": "error", "message": clean_message(exc)})
+        error = clean_message(exc)
+        with jobs_lock:
+            job["error"] = error
+            job["finished_at"] = now_iso()
+        publish(job_id, {"status": "error", "message": error})
     finally:
+        with jobs_lock:
+            job["finished_at"] = job.get("finished_at") or now_iso()
+            saveable = dict(job)
+        save_history(saveable)
         publish(job_id, {"status": "end"})
+        with jobs_lock:
+            jobs.pop(job_id, None)
+
+
+def worker_loop():
+    while True:
+        job_id = download_queue.get()
+        try:
+            with jobs_lock:
+                job = jobs.get(job_id)
+            if job:
+                run_download(job)
+        finally:
+            download_queue.task_done()
+
+
+def ensure_workers():
+    global workers_started
+    with workers_lock:
+        if workers_started:
+            return
+        for index in range(MAX_WORKERS):
+            thread = threading.Thread(target=worker_loop, name=f"download-worker-{index + 1}", daemon=True)
+            thread.start()
+        workers_started = True
+
+
+def parse_urls(payload):
+    values = []
+    if payload.get("urls"):
+        if isinstance(payload["urls"], list):
+            values = payload["urls"]
+        else:
+            values = str(payload["urls"]).splitlines()
+    elif payload.get("url"):
+        values = str(payload["url"]).splitlines()
+
+    urls = []
+    seen = set()
+    for value in values:
+        url = clean_message(value)
+        if url and url not in seen:
+            urls.append(url)
+            seen.add(url)
+    return urls
+
+
+def create_job(url, requested_format):
+    job_id = uuid.uuid4().hex
+    job = {
+        "job_id": job_id,
+        "url": url,
+        "format": requested_format,
+        "status": "queued",
+        "percent": 0,
+        "title": "",
+        "filename": "",
+        "file_path": "",
+        "error": "",
+        "logs": ["Queued."],
+        "events": queue.Queue(),
+        "created_at": now_iso(),
+        "started_at": "",
+        "finished_at": "",
+        "created_by": request.remote_addr,
+    }
+    with jobs_lock:
+        jobs[job_id] = job
+    download_queue.put(job_id)
+    return job_snapshot(job)
 
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    response = app.make_response(render_template("index.html"))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/components/<path:filename>")
+def component_file(filename):
+    return send_from_directory(
+        BASE_DIR / "web" / "components",
+        filename,
+        mimetype="application/javascript" if filename.endswith(".js") else None,
+    )
+
+
+@app.get("/styles.css")
+def stylesheet_file():
+    return send_from_directory(BASE_DIR / "web", "styles.css", mimetype="text/css")
+
+
+@app.get("/utils.js")
+def utils_file():
+    return send_from_directory(BASE_DIR / "web", "utils.js", mimetype="application/javascript")
 
 
 @app.post("/api/download")
 def start_download():
     payload = request.get_json(silent=True) or {}
-    url = clean_message(payload.get("url"))
+    urls = parse_urls(payload)
     requested_format = payload.get("format", "video")
+    force = bool(payload.get("force"))
 
-    if not url:
-        return jsonify({"error": "A video URL is required."}), 400
+    if not urls:
+        return jsonify({"error": "At least one video URL is required."}), 400
 
     if requested_format not in {"video", "audio"}:
         return jsonify({"error": "Format must be 'video' or 'audio'."}), 400
 
-    job_id = uuid.uuid4().hex
+    items = [{"url": url, "format": requested_format} for url in urls]
+    duplicates = find_duplicates(items)
+    if duplicates and not force:
+        return jsonify({"duplicates": duplicates}), 409
+
+    ensure_workers()
+    created = [create_job(url, requested_format) for url in urls]
+    return jsonify({"jobs": created, "max_workers": MAX_WORKERS})
+
+
+@app.get("/api/jobs")
+def list_jobs():
     with jobs_lock:
-        jobs[job_id] = {"queue": queue.Queue(), "created_by": request.remote_addr}
-
-    thread = threading.Thread(target=run_download, args=(job_id, url, requested_format), daemon=True)
-    thread.start()
-
-    return jsonify({"job_id": job_id})
+        active = [job_snapshot(job) for job in jobs.values() if job["status"] in {"queued", "running", "starting", "downloading", "processing"}]
+    return jsonify({"active": active, "history": recent_history(), "max_workers": MAX_WORKERS})
 
 
-@app.get("/api/progress/<job_id>")
-def progress(job_id):
+@app.get("/api/jobs/<job_id>")
+def get_job(job_id):
     with jobs_lock:
         job = jobs.get(job_id)
+    if job:
+        return jsonify(job_snapshot(job))
 
-    if not job:
+    with db_connect() as connection:
+        row = connection.execute("SELECT * FROM history WHERE job_id = ?", (job_id,)).fetchone()
+    if not row:
         return jsonify({"error": "Unknown download job."}), 404
+    return jsonify(row_to_job(row))
 
-    def event_stream():
-        try:
-            while True:
-                event = job["queue"].get()
-                yield f"data: {json.dumps(event)}\n\n"
-                if event.get("status") == "end":
-                    break
-        finally:
-            with jobs_lock:
-                jobs.pop(job_id, None)
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+@app.get("/api/files/<job_id>")
+def download_file(job_id):
+    file_path = ""
+    download_name = ""
+
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if job:
+            file_path = job.get("file_path", "")
+            download_name = job.get("filename", "")
+
+    if not file_path:
+        with db_connect() as connection:
+            row = connection.execute("SELECT file_path, filename FROM history WHERE job_id = ?", (job_id,)).fetchone()
+        if row:
+            file_path = row["file_path"] or ""
+            download_name = row["filename"] or ""
+
+    path = Path(file_path)
+    if not file_path or not path.exists() or not path.is_file():
+        abort(404)
+
+    return send_file(path, as_attachment=True, download_name=download_name or path.name)
+
+
+init_db()
 
 
 if __name__ == "__main__":
+    ensure_workers()
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="127.0.0.1", port=port, threaded=True)
