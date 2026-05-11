@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>yt-dlp Web UI</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #1f2630;
+      --text: #f0f4f8;
+      --muted: #97a6b6;
+      --border: #303a46;
+      --accent: #2fb344;
+      --accent-2: #58a6ff;
+      --danger: #ff6b6b;
+      --warning: #f5c542;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(760px, calc(100vw - 32px));
+      padding: 36px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 5vw, 42px);
+      line-height: 1.05;
+      font-weight: 750;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    form {
+      display: grid;
+      gap: 18px;
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    input,
+    select,
+    button {
+      width: 100%;
+      min-height: 48px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font: inherit;
+    }
+
+    input,
+    select {
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 14px;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.18);
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      background: var(--accent);
+      color: #06130a;
+      font-weight: 800;
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    button:hover {
+      filter: brightness(1.08);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      filter: grayscale(0.5) brightness(0.75);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      gap: 14px;
+      align-items: end;
+    }
+
+    .progress-wrap {
+      margin-top: 24px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 22px;
+    }
+
+    .bar {
+      height: 14px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #0a0e13;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 180ms ease;
+    }
+
+    .status {
+      min-height: 136px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 14px;
+      background: #0a0e13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .status.ok {
+      border-color: rgba(47, 179, 68, 0.7);
+      color: #b7f7c2;
+    }
+
+    .status.error {
+      border-color: rgba(255, 107, 107, 0.8);
+      color: #ffc0c0;
+    }
+
+    @media (max-width: 680px) {
+      body {
+        place-items: start center;
+        padding: 18px 0;
+      }
+
+      main {
+        padding: 24px;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+
+      .progress-meta {
+        display: grid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>yt-dlp Web UI</h1>
+      <p>Paste a video URL, choose an output format, and save it locally to the downloads folder.</p>
+    </header>
+
+    <form id="downloadForm">
+      <label>
+        Video URL
+        <input id="url" name="url" type="url" placeholder="https://www.youtube.com/watch?v=..." required autocomplete="off">
+      </label>
+
+      <div class="row">
+        <label>
+          Format
+          <select id="format" name="format">
+            <option value="video">Best Video + Audio</option>
+            <option value="audio">Audio Only (MP3)</option>
+          </select>
+        </label>
+
+        <button id="downloadButton" type="submit">Download</button>
+      </div>
+    </form>
+
+    <section class="progress-wrap" aria-live="polite">
+      <div class="progress-meta">
+        <span id="state">Idle</span>
+        <span id="details"></span>
+      </div>
+      <div class="bar" aria-label="Download progress">
+        <div id="barFill" class="bar-fill"></div>
+      </div>
+      <div id="status" class="status">Ready.</div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("downloadForm");
+    const urlInput = document.getElementById("url");
+    const formatInput = document.getElementById("format");
+    const button = document.getElementById("downloadButton");
+    const state = document.getElementById("state");
+    const details = document.getElementById("details");
+    const barFill = document.getElementById("barFill");
+    const statusBox = document.getElementById("status");
+
+    let events = null;
+
+    function setProgress(percent) {
+      const value = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+      barFill.style.width = `${value}%`;
+    }
+
+    function writeStatus(message, kind = "") {
+      const time = new Date().toLocaleTimeString();
+      statusBox.className = `status ${kind}`.trim();
+      statusBox.textContent += `\n[${time}] ${message}`;
+      statusBox.scrollTop = statusBox.scrollHeight;
+    }
+
+    function resetUi() {
+      if (events) {
+        events.close();
+        events = null;
+      }
+
+      statusBox.textContent = "";
+      statusBox.className = "status";
+      state.textContent = "Starting";
+      details.textContent = "";
+      setProgress(0);
+      button.disabled = true;
+    }
+
+    function finishUi() {
+      button.disabled = false;
+      events = null;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      resetUi();
+
+      try {
+        const response = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: urlInput.value.trim(),
+            format: formatInput.value
+          })
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to start download.");
+        }
+
+        writeStatus("Download job created.");
+        events = new EventSource(`/api/progress/${payload.job_id}`);
+
+        events.onmessage = (message) => {
+          const data = JSON.parse(message.data);
+
+          if (data.status === "end") {
+            events.close();
+            finishUi();
+            return;
+          }
+
+          if (typeof data.percent === "number") {
+            setProgress(data.percent);
+          }
+
+          if (data.status === "downloading") {
+            state.textContent = `Downloading${typeof data.percent === "number" ? ` ${data.percent}%` : ""}`;
+            details.textContent = [data.speed, data.eta ? `ETA ${data.eta}` : ""].filter(Boolean).join(" | ");
+          } else if (data.status === "complete") {
+            state.textContent = "Complete";
+            details.textContent = data.filename || "";
+            setProgress(100);
+            writeStatus(data.message || "Download complete.", "ok");
+            return;
+          } else if (data.status === "error") {
+            state.textContent = "Error";
+            details.textContent = "";
+            writeStatus(data.message || "Download failed.", "error");
+            return;
+          } else {
+            state.textContent = data.status ? data.status[0].toUpperCase() + data.status.slice(1) : "Working";
+          }
+
+          if (data.message) {
+            writeStatus(data.message);
+          }
+        };
+
+        events.onerror = () => {
+          writeStatus("Connection to progress stream was interrupted.", "error");
+          if (events) {
+            events.close();
+          }
+          finishUi();
+        };
+      } catch (error) {
+        state.textContent = "Error";
+        details.textContent = "";
+        writeStatus(error.message, "error");
+        finishUi();
+      }
+    });
+  </script>
+</body>
+</html>
