@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTML Table to Markdown</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #1b2430;
+      --muted: #667085;
+      --line: #d7dde8;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --danger: #b42318;
+      --code: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      min-height: 36px;
+      padding: 7px 12px;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary:hover {
+      background: var(--accent-dark);
+      border-color: var(--accent-dark);
+    }
+
+    textarea {
+      display: block;
+      width: 100%;
+      min-height: 440px;
+      resize: vertical;
+      border: 0;
+      outline: 0;
+      padding: 16px;
+      color: var(--code);
+      font: 14px/1.55 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      tab-size: 2;
+    }
+
+    textarea[readonly] {
+      background: #fbfcff;
+    }
+
+    .status {
+      min-height: 24px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 24px, 1120px);
+        padding: 20px 0;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .section-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      textarea {
+        min-height: 280px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>HTML Table to Markdown</h1>
+      <p>HTML 표 코드를 붙여넣으면 Markdown 표로 변환합니다.</p>
+    </header>
+
+    <div class="workspace">
+      <section>
+        <div class="section-head">
+          <h2>HTML 입력</h2>
+          <div class="actions">
+            <button type="button" id="sampleBtn">예시</button>
+            <button type="button" id="clearBtn">지우기</button>
+            <button type="button" class="primary" id="convertBtn">변환</button>
+          </div>
+        </div>
+        <textarea id="htmlInput" spellcheck="false" placeholder="<table>
+  <tr><th>이름</th><th>역할</th></tr>
+  <tr><td>Kim</td><td>Frontend</td></tr>
+</table>"></textarea>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Markdown 결과</h2>
+          <div class="actions">
+            <button type="button" id="copyBtn">복사</button>
+          </div>
+        </div>
+        <textarea id="markdownOutput" readonly spellcheck="false" placeholder="| 이름 | 역할 |
+| --- | --- |
+| Kim | Frontend |"></textarea>
+      </section>
+    </div>
+
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    const htmlInput = document.querySelector("#htmlInput");
+    const markdownOutput = document.querySelector("#markdownOutput");
+    const statusEl = document.querySelector("#status");
+
+    const sample = `<table>
+  <thead>
+    <tr>
+      <th>이름</th>
+      <th>역할</th>
+      <th>메모</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Kim</td>
+      <td>Frontend</td>
+      <td>HTML | CSS</td>
+    </tr>
+    <tr>
+      <td>Lee</td>
+      <td>Backend</td>
+      <td>API<br>DB</td>
+    </tr>
+  </tbody>
+</table>`;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function cleanCellText(cell) {
+      return cell.textContent
+        .replace(/\s+/g, " ")
+        .replace(/\|/g, "\\|")
+        .trim();
+    }
+
+    function normalizeRows(table) {
+      return Array.from(table.rows)
+        .map((row) => Array.from(row.cells).map(cleanCellText))
+        .filter((row) => row.length > 0);
+    }
+
+    function rowToMarkdown(row, width) {
+      const cells = Array.from({ length: width }, (_, index) => row[index] || "");
+      return `| ${cells.join(" | ")} |`;
+    }
+
+    function tableToMarkdown(table) {
+      const rows = normalizeRows(table);
+
+      if (rows.length === 0) {
+        return "";
+      }
+
+      const hasHeaderCell = Array.from(table.rows[0].cells).some((cell) => cell.tagName.toLowerCase() === "th");
+      const header = hasHeaderCell ? rows[0] : rows[0];
+      const bodyRows = rows.slice(1);
+      const width = Math.max(header.length, ...bodyRows.map((row) => row.length), 1);
+      const separator = Array.from({ length: width }, () => "---");
+
+      return [
+        rowToMarkdown(header, width),
+        rowToMarkdown(separator, width),
+        ...bodyRows.map((row) => rowToMarkdown(row, width))
+      ].join("\n");
+    }
+
+    function convertHtmlTables() {
+      const input = htmlInput.value.trim();
+
+      if (!input) {
+        markdownOutput.value = "";
+        setStatus("변환할 HTML 표를 입력하세요.", true);
+        return;
+      }
+
+      const parser = new DOMParser();
+      const documentHtml = parser.parseFromString(input, "text/html");
+      const tables = Array.from(documentHtml.querySelectorAll("table"));
+
+      if (tables.length === 0) {
+        markdownOutput.value = "";
+        setStatus("table 태그를 찾지 못했습니다.", true);
+        return;
+      }
+
+      const markdown = tables
+        .map(tableToMarkdown)
+        .filter(Boolean)
+        .join("\n\n");
+
+      markdownOutput.value = markdown;
+      setStatus(`${tables.length}개 표를 변환했습니다.`);
+    }
+
+    document.querySelector("#convertBtn").addEventListener("click", convertHtmlTables);
+
+    document.querySelector("#sampleBtn").addEventListener("click", () => {
+      htmlInput.value = sample;
+      convertHtmlTables();
+    });
+
+    document.querySelector("#clearBtn").addEventListener("click", () => {
+      htmlInput.value = "";
+      markdownOutput.value = "";
+      setStatus("");
+      htmlInput.focus();
+    });
+
+    document.querySelector("#copyBtn").addEventListener("click", async () => {
+      if (!markdownOutput.value) {
+        setStatus("복사할 Markdown 결과가 없습니다.", true);
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(markdownOutput.value);
+        setStatus("Markdown 결과를 복사했습니다.");
+      } catch {
+        markdownOutput.select();
+        document.execCommand("copy");
+        setStatus("Markdown 결과를 복사했습니다.");
+      }
+    });
+
+    htmlInput.addEventListener("input", () => {
+      if (htmlInput.value.trim()) {
+        convertHtmlTables();
+      } else {
+        markdownOutput.value = "";
+        setStatus("");
+      }
+    });
+  </script>
+</body>
+</html>
