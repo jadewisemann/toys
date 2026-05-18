@@ -1,0 +1,37 @@
+! 2026. 4. 28. https://bwviewer.bookers.life
+bwviewer.bookers.life##.md\:-translate-x-\[3px\].md\:h-\[36px\].-translate-x-\[6px\].h-\[28px\] path
+bwviewer.bookers.life##.-translate-x-full.w-\[calc\(50dvw-50\%\)\].h-dvh
+
+! https://www.naver.com > 불필요한 요소 지우기
+www.naver.com##.Layout-module__column_left___tLO23
+www.naver.com##div.Layout-module__content_area___b_3TU:nth-of-type(4)
+www.naver.com##.ad_premium_area
+www.naver.com##div.Layout-module__content_area___b_3TU:nth-of-type(5)
+www.naver.com##.RightWidget-module__tool_area___dhpNQ
+www.naver.com###footer
+! https://www.naver.com > 로그인 가운데로
+www.naver.com##div#root:style(display: flex !important; justify-content: center !important;)
+
+! youtube
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(1)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(4)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(5)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(6)
+www.youtube.com###copyright
+www.youtube.com###guide-links-primary
+www.youtube.com###guide-links-secondary
+www.youtube.com###buttons > ytd-button-renderer.ytd-masthead.style-scope
+www.youtube.com##.ytd-notification-topbar-button-renderer.style-scope
+www.youtube.com###chips-content
+www.youtube.com###content > .ytd-rich-section-renderer.style-scope
+
+! 유튜브 홈 추천 영상 제거
+www.youtube.com##ytd-browse[page-subtype="home"] #contents.ytd-rich-grid-renderer
+! 사이드바 추천 영상 제거
+www.youtube.com##ytd-watch-next-secondary-results-renderer
+! 댓글창 제거
+www.youtube.com##ytd-comments
+! 영상 하단 숏츠 및 추천 콘텐츠 제거
+www.youtube.com##ytd-rich-shelf-renderer
+! 영상 하단 기타 정보 섹션(설명란 제외) 제거
+www.youtube.com##ytd-secondary-engagement-renderer
