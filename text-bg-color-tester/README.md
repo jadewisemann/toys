@@ -1,0 +1,15 @@
+# todo
+- add feat
+    - color button
+      - [ ] copy hex code button
+      - [ ] custom input color button
+    - 'place holder text'(so call, 'lorem ipsum')
+      - [ ] random text
+      - [ ] manual input
+      - [ ] font family
+      - [ ] font boldness
+      - [ ] italic or not
+      - [ ] size 
+      - etc..
+- add demo using cloud computin (maybe 'vercel'?)
+- add screen shot
