@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>yt-dlp Queue</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>yt-dlp Queue</h1>
+        <p>Queue downloads, compare duplicates, review logs, and download completed files in the browser.</p>
+      </div>
+      <p class="muted" id="lastUpdated">Not loaded</p>
+    </header>
+
+    <yt-dlp-app></yt-dlp-app>
+  </main>
+
+  <script>
+    const lastUpdated = document.getElementById("lastUpdated");
+    if (lastUpdated) {
+      lastUpdated.textContent = "Loading app...";
+    }
+
+    const version = Date.now();
+    const appModules = [
+      `/static/components/yt-dlp-app.js?v=${version}`,
+      `./components/yt-dlp-app.js?v=${version}`
+    ];
+
+    async function loadApp() {
+      let lastError = null;
+      for (const modulePath of appModules) {
+        try {
+          await import(modulePath);
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      if (lastUpdated) {
+        lastUpdated.textContent = `App load failed: ${lastError?.message || "module not found"}`;
+      }
+    }
+
+    loadApp();
+  </script>
+</body>
+</html>
