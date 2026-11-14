@@ -1,0 +1,38 @@
+! Title: My Custom Filters
+! Last modified: 2026-05-18
+! Description: 개인 맞춤형 웹 환경 필터 (NAVER, YouTube, BWViewer)
+
+! --- BWViewer ---
+bwviewer.bookers.life##.md\:-translate-x-\[3px\].md\:h-\[36px\].-translate-x-\[6px\].h-\[28px\] path
+bwviewer.bookers.life##.-translate-x-full.w-\[calc\(50dvw-50\%\)\].h-dvh
+
+! --- NAVER ---
+www.naver.com##.Layout-module__column_left___tLO23
+www.naver.com##div.Layout-module__content_area___b_3TU:nth-of-type(4)
+www.naver.com##div.Layout-module__content_area___b_3TU:nth-of-type(5)
+www.naver.com##.ad_premium_area
+www.naver.com##.RightWidget-module__tool_area___dhpNQ
+www.naver.com###footer
+! 로그인 영역 중앙 정렬
+www.naver.com##div#root:style(display: flex !important; justify-content: center !important;)
+
+! --- YouTube ---
+! 사이드바 메뉴 섹션 차단
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(1)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(4)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(5)
+www.youtube.com##ytd-guide-section-renderer.ytd-guide-renderer.style-scope:nth-of-type(6)
+! 기타 UI 요소 차단
+www.youtube.com###copyright
+www.youtube.com###guide-links-primary
+www.youtube.com###guide-links-secondary
+www.youtube.com###buttons > ytd-button-renderer.ytd-masthead.style-scope
+www.youtube.com##.ytd-notification-topbar-button-renderer.style-scope
+www.youtube.com###chips-content
+www.youtube.com###content > .ytd-rich-section-renderer.style-scope
+! 추천 및 분산 요소 차단
+www.youtube.com##ytd-browse[page-subtype="home"] #contents.ytd-rich-grid-renderer
+www.youtube.com##ytd-watch-next-secondary-results-renderer
+www.youtube.com##ytd-comments
+www.youtube.com##ytd-rich-shelf-renderer
+www.youtube.com##ytd-secondary-engagement-renderer
