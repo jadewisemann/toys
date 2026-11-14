@@ -1,0 +1,15 @@
+{
+  "name": "capture-image-cutter",
+  "version": "1.0.0",
+  "description": "전자책 스크린샷 이미지 크롭 도구",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pdfkit": "^0.18.0",
+    "sharp": "^0.33.2"
+  }
+}
